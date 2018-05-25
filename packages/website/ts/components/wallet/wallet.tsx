@@ -1,4 +1,12 @@
 import {
+    BrowserWebSocketOrderbookChannel,
+    OrderbookChannel,
+    orderbookChannelFactory,
+    OrderbookChannelHandler,
+    OrderbookChannelSubscriptionOpts,
+    OrderbookResponse,
+} from '@0xproject/connect';
+import {
     constants as sharedConstants,
     EtherscanLinkSuffixes,
     Styles,
@@ -66,7 +74,7 @@ export interface WalletProps {
     onRemoveToken: () => void;
 }
 
-interface WalletState {
+export interface WalletState {
     trackedTokenStateByAddress: TokenStateByAddress;
     wrappedEtherDirection?: Side;
     isHoveringSidebar: boolean;
@@ -158,6 +166,7 @@ export class Wallet extends React.Component<WalletProps, WalletState> {
         const trackedTokenAddresses = _.keys(this.state.trackedTokenStateByAddress);
         // tslint:disable-next-line:no-floating-promises
         this._fetchBalancesAndAllowancesAsync(trackedTokenAddresses);
+        this._subscribeOrderbookAsync();
     }
     public componentWillUnmount(): void {
         this._isUnmounted = true;
@@ -498,6 +507,84 @@ export class Wallet extends React.Component<WalletProps, WalletState> {
         });
         return trackedTokenStateByAddress;
     }
+    private async _subscribeOrderbookAsync(): Promise<void> {
+        const radarUrl = 'wss://ws.radarrelay.com/0x/v0/ws';
+        const orderbookChannel = await orderbookChannelFactory.createBrowserOrderbookChannelAsync(radarUrl);
+        // Generate OrderbookChannelSubscriptionOpts for watching the ZRX/WETH orderbook
+        const zrxWethSubscriptionOpts: OrderbookChannelSubscriptionOpts = {
+            baseTokenAddress: '0xe41d2489571d322189246dafa5ebde1f4699f498',
+            quoteTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+            snapshot: true,
+            limit: 20,
+        };
+        // Generate OrderbookChannelSubscriptionOpts for watching the MKR/WETH orderbook
+        const mkrWethSubscriptionOpts: OrderbookChannelSubscriptionOpts = {
+            baseTokenAddress: '0x42d6622dece394b54999fbd73d108123806f6a18'.toLowerCase(),
+            quoteTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+            snapshot: true,
+            limit: 20,
+        };
+        // const zrxWethSubscriptionOpts: OrderbookChannelSubscriptionOpts = {
+        //     baseTokenAddress: '0x6ff6c0ff1d68b964901f986d4c9fa3ac68346570',
+        //     quoteTokenAddress: '0xd0a1e359811322d97991e03f863a0c30c2cf029c',
+        //     snapshot: true,
+        //     limit: 20,
+        // };
+        // // Generate OrderbookChannelSubscriptionOpts for watching the MKR/WETH orderbook
+        // const mkrWethSubscriptionOpts: OrderbookChannelSubscriptionOpts = {
+        //     baseTokenAddress: '0x42d6622dece394b54999fbd73d108123806f6a18'.toLowerCase(),
+        //     quoteTokenAddress: '0xd0a1e359811322d97991e03f863a0c30c2cf029c',
+        //     snapshot: true,
+        //     limit: 20,
+        // };
+
+        // Create a OrderbookChannelHandler to handle messages from the relayer
+        const zrxWethHandler = {
+            onSnapshot: (
+                channel: OrderbookChannel,
+                subscriptionOpts: OrderbookChannelSubscriptionOpts,
+                snapshot: OrderbookResponse,
+            ) => {
+                // console.log(`ZRX SNAPSHOT: ${JSON.stringify(snapshot)}`);
+                console.log(`SNAPSHOT ZRX`);
+            },
+            onUpdate: () => {
+                console.log('UPDATE ZRX');
+            },
+            onError: (channel: OrderbookChannel, subscriptionOpts: OrderbookChannelSubscriptionOpts, err: Error) => {
+                console.log(`ERROR ZRX`);
+            },
+            onClose: () => {
+                console.log('CLOSE ZRX');
+            },
+        };
+
+        // Create a OrderbookChannelHandler to handle messages from the relayer
+        const mkrWethHandler = {
+            onSnapshot: (
+                channel: OrderbookChannel,
+                subscriptionOpts: OrderbookChannelSubscriptionOpts,
+                snapshot: OrderbookResponse,
+            ) => {
+                // console.log(`MKR SNAPSHOT: ${JSON.stringify(snapshot)}`);
+                console.log(`SNAPSHOT MKR`);
+            },
+            onUpdate: () => {
+                console.log('UPDATE MKR');
+            },
+            onError: (channel: OrderbookChannel, subscriptionOpts: OrderbookChannelSubscriptionOpts, err: Error) => {
+                console.log(`ERROR MKR`);
+            },
+            onClose: () => {
+                console.log('CLOSE MKR');
+            },
+        };
+
+        // Subscribe to the relayer
+        orderbookChannel.subscribe(zrxWethSubscriptionOpts, zrxWethHandler);
+        orderbookChannel.subscribe(mkrWethSubscriptionOpts, mkrWethHandler);
+        console.log('Listening for ZRX/WETH orderbook...');
+    }
     private async _fetchBalancesAndAllowancesAsync(tokenAddresses: string[]): Promise<void> {
         const balanceAndAllowanceTupleByAddress: ItemByAddress<BigNumber[]> = {};
         const userAddressIfExists = _.isEmpty(this.props.userAddress) ? undefined : this.props.userAddress;
@@ -576,4 +663,6 @@ export class Wallet extends React.Component<WalletProps, WalletState> {
         const etherToken = _.find(tokens, { symbol: ETHER_TOKEN_SYMBOL });
         return etherToken;
     }
-} // tslint:disable:max-file-line-count
+}
+
+// tslint:disable:max-file-line-count
